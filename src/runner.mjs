@@ -19,7 +19,9 @@ export const run = async () => {
 
 export const it = (name, body) => {
   try {
+    invokeBefores();
     body();
+    invokeAfters();
     console.log(indent(color(`<green>${tick}</green> ${name}`)));
     successes++;
   } catch (e) {
@@ -34,10 +36,42 @@ export const it = (name, body) => {
 
 export const describe = (name, body) => {
   console.log(indent(name));
-  describeStack = [...describeStack, name];
+  describeStack = [...describeStack, makeDescribe(name)];
   body();
   describeStack = withoutLast(describeStack);
 };
+
+export const afterEach = (body) =>
+  updateDescribe({
+    afters: [...currentDescribe().afters, body],
+  });
+
+export const beforeEach = (body) =>
+  updateDescribe({
+    befores: [...currentDescribe().befores, body],
+  });
+
+const currentDescribe = () => last(describeStack);
+
+const updateDescribe = (newProps) => {
+  const newDescribe = {
+    ...currentDescribe(),
+    ...newProps,
+  };
+  describeStack = [...withoutLast(describeStack), newDescribe];
+};
+
+const invokeAfters = () =>
+  invokeAll(describeStack.flatMap((describe) => describe.afters));
+
+const invokeBefores = () =>
+  invokeAll(describeStack.flatMap((describe) => describe.befores));
+
+const makeDescribe = (name) => ({
+  name,
+  befores: [],
+  afters: [],
+});
 
 const printFailure = (failure) => {
   console.error(color(fullTestDescription(failure)));
@@ -55,11 +89,17 @@ const printFailures = () => {
 };
 
 const fullTestDescription = ({ name, describeStack }) =>
-  [...describeStack, name].map((name) => `<bold>${name}</bold>`).join(" → ");
+  [...describeStack, { name }]
+    .map(({ name }) => `<bold>${name}</bold>`)
+    .join(" → ");
 
 const withoutLast = (arr) => arr.slice(0, -1);
 
 const indent = (message) => `${" ".repeat(describeStack.length * 2)}${message}`;
+
+const last = (arr) => arr.at(-1);
+
+const invokeAll = (fnArray) => fnArray.forEach((fn) => fn());
 
 let successes = 0;
 let failures = [];
