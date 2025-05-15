@@ -1,5 +1,7 @@
 import path from "path";
 import { color } from "./colors.mjs";
+import * as matchers from "./matchers.mjs";
+import { ExpectationError } from "./ExpectationError.mjs";
 
 export const run = async () => {
   try {
@@ -18,19 +20,21 @@ export const run = async () => {
 };
 
 export const it = (name, body) => {
+  currentTest = makeTest(name);
   try {
     invokeBefores();
     body();
     invokeAfters();
+  } catch (e) {
+    currentTest.errors.push(e);
+  }
+
+  if (currentTest.errors.length > 0) {
+    console.log(indent(color(`<red>${cross}</red> ${name}`)));
+    failures.push(currentTest);
+  } else {
     console.log(indent(color(`<green>${tick}</green> ${name}`)));
     successes++;
-  } catch (e) {
-    console.log(indent(color(`<red>${cross}</red> ${name}`)));
-    failures.push({
-      error: e,
-      name,
-      describeStack,
-    });
   }
 };
 
@@ -50,6 +54,24 @@ export const beforeEach = (body) =>
   updateDescribe({
     befores: [...currentDescribe().befores, body],
   });
+
+export const expect = (actual) => new Proxy({}, matcherHandler(actual));
+
+const matcherHandler = (actual) => ({
+  get:
+    (_, name) =>
+    (...args) => {
+      try {
+        matchers[name](actual, ...args);
+      } catch (e) {
+        if (e instanceof ExpectationError) {
+          currentTest.errors.push(e);
+        } else {
+          throw e;
+        }
+      }
+    },
+});
 
 const currentDescribe = () => last(describeStack);
 
@@ -75,7 +97,9 @@ const makeDescribe = (name) => ({
 
 const printFailure = (failure) => {
   console.error(color(fullTestDescription(failure)));
-  console.error(failure.error);
+  failure.errors.forEach((error) => {
+    console.error(error);
+  });
   console.error("");
 };
 
@@ -101,6 +125,12 @@ const last = (arr) => arr.at(-1);
 
 const invokeAll = (fnArray) => fnArray.forEach((fn) => fn());
 
+const makeTest = (name) => ({
+  name,
+  errors: [],
+  describeStack,
+});
+
 let successes = 0;
 let failures = [];
 const exitCodes = {
@@ -110,3 +140,4 @@ const exitCodes = {
 const tick = "\u2713";
 const cross = "\u2717";
 let describeStack = [];
+let currentTest;
