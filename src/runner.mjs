@@ -2,12 +2,16 @@ import path from "path";
 import { color } from "./colors.mjs";
 import * as matchers from "./matchers.mjs";
 import { ExpectationError } from "./ExpectationError.mjs";
+import { formatStackTrace } from "./stackTraceFormatter.mjs";
+
+Error.prepareStackTrace = formatStackTrace;
 
 export const run = async () => {
   try {
     await import(path.resolve(process.cwd(), "../example/test/tests.mjs"));
   } catch (e) {
-    console.error(e);
+    console.error(e.message);
+    console.error(e.stack);
   }
   printFailures();
   console.log(
@@ -98,7 +102,8 @@ const makeDescribe = (name) => ({
 const printFailure = (failure) => {
   console.error(color(fullTestDescription(failure)));
   failure.errors.forEach((error) => {
-    console.error(error);
+    console.error(error.message);
+    console.error(error.stack);
   });
   console.error("");
 };
